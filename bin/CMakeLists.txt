@@ -5,9 +5,8 @@
 INSTALL(FILES
             nodes-apt-diff
             nodes-apt-get
-            nodes-apt-install-common
             nodes-run-cmd
-            nodes-sync-pkgs             
+            nodes-offline
         DESTINATION
             bin
         PERMISSIONS

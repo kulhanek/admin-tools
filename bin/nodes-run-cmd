@@ -52,7 +52,7 @@ while [ $# -gt 0 ]; do
 done
 
 # get all nodes from torque
-NODES=`eval "pnodes --names $EXTRA"`
+NODES=`eval "pnodes --hosts $EXTRA"`
 if [ $? -ne 0 ]; then
     echo ">> ERROR: unable to get list of nodes!"
     echo ""
