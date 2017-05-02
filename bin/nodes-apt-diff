@@ -1,0 +1,42 @@
+#!/bin/bash
+# print differences between installed packages on two nodes
+
+if [ $# -ne 2 ]; then
+   echo "Two hostnames are expected!"
+   exit 1
+fi
+
+echo -n "Getting package info from $1 ... "
+ssh -o StrictHostKeyChecking=no $1 dpkg --get-selections | grep -v deinstall | awk '{ print $1; }' | sort -u > /tmp/$USER.$1.dpkg
+
+if [ $? -ne 0 ]; then
+   echo "error occured - check /tmp/$USER.$1.dpkg"
+   exit 1
+else
+   echo "OK"
+fi
+
+echo -n "Getting package info from $2 ... "
+ssh -o StrictHostKeyChecking=no $2 dpkg --get-selections | grep -v deinstall | awk '{ print $1; }' | sort -u > /tmp/$USER.$2.dpkg
+
+if [ $? -ne 0 ]; then
+   echo "error occured - check /tmp/$USER.$2.dpkg"
+   exit 1
+else
+   echo "OK"
+fi
+
+diff /tmp/$USER.$1.dpkg /tmp/$USER.$2.dpkg > /tmp/$USER.$1.$2.diff
+
+echo 
+echo -n "Node $1 has these extra packages:"
+cat /tmp/$USER.$1.$2.diff | grep "<" | awk 'BEGIN{ count=0; } { printf(" %s",$2); count++; } END{ if(count == 0) printf(" none"); }'
+echo
+
+echo
+echo -n "Node $2 has these extra packages:"
+cat /tmp/$USER.$1.$2.diff | grep ">" | awk 'BEGIN{ count=0; } { printf(" %s",$2); count++; } END{ if(count == 0) printf(" none"); }'
+echo
+
+echo
+

@@ -1,0 +1,219 @@
+#!/bin/bash
+
+echo ""
+
+if [ "`id -un`" != "infinity" ]; then
+   echo ">> ERROR: Only infinity can run this command!"
+   echo ""
+   exit 1
+fi 
+
+EXTRA=""
+MODE="par"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        '--keep' | '-k' )
+            shift
+            EXTRA="$EXTRA -k"
+            ;;
+        '--property' | '-p' )
+            shift
+            EXTRA="$EXTRA -s \"props == $1\""
+            shift
+            ;;
+        '--group' | '-g' )
+            shift
+            EXTRA="$EXTRA -g $1"
+            shift
+            ;;
+        '--search' | '-s' )
+            shift
+            EXTRA="$EXTRA -s \"$1\""
+            shift
+            ;;
+        '--sequential' | '-1' )
+            shift
+            MODE="seq"
+            ;;
+        '--help' | '-h' )
+            shift
+            echo "nodes-sync-pkgs [--sequential|-1] [--keep|-k] [--property|-p PROPERTY] [--group|-g GROUP] [--search|-s SEXP] [--help|-h]"
+            echo ""
+            exit 0
+            ;;
+        '--')
+            shift;
+            break;
+            ;;
+        *)
+            break;
+            ;;
+    esac
+done
+
+# get all nodes from torque
+NODES=`eval "pnodes --names $EXTRA"`
+if [ $? -ne 0 ]; then
+    echo ">> ERROR: unable to get list of nodes!"
+    echo ""
+    exit 1
+fi
+
+LOG="/home/infinity/AManagement/logs/sync-pkgs/`date +%Y-%m-%d+%H:%M:%S`"
+if [ -d $LOG ]; then
+    echo ">> ERROR: the action is already in progress, the log directory already exists: $LOG!"
+    echo ""
+    exit 1
+fi
+
+mkdir -p "$LOG/"
+if [ $? -ne 0 ]; then
+    echo ">> ERROR: unable to create the log directory: $LOG!"
+    echo ""
+    exit 1
+fi
+
+echo "# List of nodes:"
+echo "# ------------------------------------------------------------------------------"
+for NODE in $NODES; do
+    printf "%-30s\n" $NODE
+done
+echo "# ------------------------------------------------------------------------------"
+echo ""
+echo "Would you like to continue? (YES/NO)"
+read A
+if [ "$A" != "YES" ]; then
+    echo ">> ERROR: terminated upon user request!"
+    echo ""
+    exit 1
+fi
+
+echo ""
+echo "# Retrieving packages ..."
+echo "# ------------------------------------------------------------------------------"
+
+for NODE in $NODES; do
+    printf "%-30s " $NODE
+    ssh -o StrictHostKeyChecking=no $NODE dpkg --get-selections | grep -v deinstall | awk '{ print $1; }' | sort -u > $LOG/${NODE}.dpkg
+    echo "- done"
+done
+
+echo ""
+echo "# Assembling packages ..."
+echo "# ------------------------------------------------------------------------------"
+rm -f $LOG/all-t.dpkg
+
+for NODE in $NODES; do
+    printf "%-30s " $NODE
+    cat $LOG/${NODE}.dpkg >> $LOG/all-t.dpkg
+    echo "- `cat $LOG/${NODE}.dpkg | wc -l`"
+done
+echo "# ------------------------------------------------------------------------------"
+sort -u $LOG/all-t.dpkg > $LOG/all.dpkg
+rm -rf $LOG/all-t.dpkg
+echo "Total number of unique packages: `cat $LOG/all.dpkg | wc -l`"
+echo ""
+
+echo ""
+echo "# Missing packages ..."
+echo "# ------------------------------------------------------------------------------"
+
+for NODE in $NODES; do
+   printf ">>>>>>> %-30s " $NODE
+   echo ""
+   diff $LOG/all.dpkg $LOG/${NODE}.dpkg > $LOG/${NODE}.diff
+   cat $LOG/${NODE}.diff | grep "<" | awk 'BEGIN{ count=0; } { printf(" %s",$2); count++; } END{ if(count == 0) printf(" none"); printf("\n"); }'
+   cat $LOG/${NODE}.diff | grep "<" | awk '{ printf(" %s",$2); }' > $LOG/${NODE}.install
+done
+echo "# ------------------------------------------------------------------------------"
+
+echo "Would you like to continue? (YES/NO)"
+read A
+if [ "$A" != "YES" ]; then
+   echo ">> ERROR: terminated upon user request!"
+   echo ""
+   exit 1
+fi
+
+echo ""
+echo "# Starting jobs ..."
+echo "# ------------------------------------------------------------------------------"
+
+# for every node 
+NJ=0
+for NODE in $NODES; do
+   if [ $MODE == "par" ]; then
+      printf "%-30s " $NODE
+   else
+      echo ""
+      printf "# %-30s\n" $NODE
+      echo "# ------------------------------------------------------------------------------"
+   fi
+   # perform installation
+   if [ $MODE == "par" ]; then
+      ssh -o StrictHostKeyChecking=no $NODE "DEBIAN_FRONTEND=noninteractive sudo xargs -a $LOG/${NODE}.install -- apt-get -y install; if [ \$? -eq 0 ]; then echo \"$NODE: OK\"; else echo \"$NODE: FAIL\"; fi" &> "$LOG/${NODE}.log" &
+      echo "- started on background"
+   else
+      ssh -o StrictHostKeyChecking=no $NODE "DEBIAN_FRONTEND=noninteractive sudo xargs -a $LOG/${NODE}.install -- apt-get -y install; if [ \$? -eq 0 ]; then echo \"$NODE: OK\"; else echo \"$NODE: FAIL\"; fi" 2>&1 | tee "$LOG/${NODE}.log" 
+   fi
+   ((NJ++))
+done
+
+if [ $MODE == "seq" ]; then
+   echo ""
+   exit 0
+fi
+echo "# ------------------------------------------------------------------------------"
+
+echo ""
+echo "Number of started jobs: $NJ"
+
+while [ $NJ -gt 0 ]; do
+    echo ""
+    echo "# Incremental progress ..."
+    echo "# ------------------------------------------------------------------------------"
+    for NODE in $NODES; do
+        printf ">>>>>>>>>>>>>>>> %-60s\n" $NODE
+        if [ -f "$LOG/${NODE}.log" ]; then
+            tail -2 $LOG/${NODE}.log | awk '{ printf("  %s\n",$0); }'
+        else
+            echo "  no log file"
+        fi
+    done
+    echo "# ------------------------------------------------------------------------------"
+    jobs > /tmp/list.$$
+    NJ=`cat /tmp/list.$$ | wc -l`
+    echo "# Still running: $NJ"
+    sleep 5
+    jobs > /tmp/list.$$
+    NJ=`cat /tmp/list.$$ | wc -l`
+done
+
+echo ""
+echo "# Final status"
+OK=0
+FA=0
+NR=0
+echo "# ------------------------------------------------------------------------------"
+for NODE in $NODES; do
+    printf "%-30s " $NODE
+    if [ -f "$LOG/${NODE}.log" ]; then
+        STR=`tail -1 $LOG/${NODE}.log | awk '{ printf("%s\n",$0); i++; } END { if(i==0) printf("\n"); }'`
+        echo "$STR"
+        if [[ "$STR" == *"OK" ]]; then
+            ((OK++))
+        else 
+            ((FA++))
+        fi
+    else
+        echo "- no log file"
+        ((NR++))
+    fi
+done
+echo "# ------------------------------------------------------------------------------"
+echo "Logs: $LOG/"
+echo "OK:   $OK"
+echo "FAIL: $FA"
+echo "ND:   $NR"
+echo ""
+
