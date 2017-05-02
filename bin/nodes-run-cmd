@@ -10,6 +10,7 @@ fi
 
 EXTRA=""
 MODE="par"
+RUSER=root
 while [ $# -gt 0 ]; do
     case "$1" in
         '--keep' | '-k' )
@@ -35,9 +36,14 @@ while [ $# -gt 0 ]; do
             shift
             MODE="seq"
             ;;
+        '--user' | '-u' )
+            shift
+            RUSER=$1
+            shift
+            ;;
         '--help' | '-h' )
             shift
-            echo "nodes-run-cmd [--sequential|-1] [--keep|-k] [--property|-p PROPERTY] [--group|-g GROUP] [--search|-s SEXP] [--help|-h] [--] ARGS"
+            echo "nodes-run-cmd [--sequential|-1] [--keep|-k] [--property|-p PROPERTY] [--group|-g GROUP] [--search|-s SEXP] [--user|-u USER] [--help|-h] [--] ARGS"
             echo ""
             exit 0
             ;;
@@ -96,19 +102,19 @@ echo "# ------------------------------------------------------------------------
 NJ=0
 for NODE in $NODES; do
     if [ $MODE == "par" ]; then
-        printf "%-30s " $NODE
+        printf "%-30s " $RUSER@$NODE
     else
         echo ""
-        printf "# %-30s\n" $NODE
+        printf "# %-30s\n" $RUSER@$NODE
         echo "# ------------------------------------------------------------------------------"
     fi
 
     # perform installation
     if [ $MODE == "par" ]; then
-        ssh -o StrictHostKeyChecking=no $NODE "sudo $*; if [ \$? -eq 0 ]; then echo \"$NODE: OK\"; else echo \"$NODE: FAIL\"; fi" &> "$LOG/${NODE}.log" &
+        ssh -o StrictHostKeyChecking=no $RUSER@$NODE "$*; if [ \$? -eq 0 ]; then echo \"$NODE: OK\"; else echo \"$NODE: FAIL\"; fi" &> "$LOG/${NODE}.log" &
         echo "- started on background"
     else
-        ssh -o StrictHostKeyChecking=no $NODE "sudo $*; if [ \$? -eq 0 ]; then echo \"$NODE: OK\"; else echo \"$NODE: FAIL\"; fi" 2>&1 | tee "$LOG/${NODE}.log" 
+        ssh -o StrictHostKeyChecking=no $RUSER@$NODE "$*; if [ \$? -eq 0 ]; then echo \"$NODE: OK\"; else echo \"$NODE: FAIL\"; fi" 2>&1 | tee "$LOG/${NODE}.log" 
     fi
     ((NJ++))
 done
