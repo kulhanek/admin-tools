@@ -1,15 +1,11 @@
 #!/bin/bash
 
-SITES="clusters"
+SITES="our-clusters"
 PKG="admin-tools"
+MAJOR_VERSION=2
 PREFIX="common"
 
 # ------------------------------------
-
-if [ "`ls *.tar.gz | wc -l`" -ne 1 ]; then
-   echo "ERROR: More than one archive present in the current directory!"
-   exit 1
-fi
 
 if [ -z "$AMS_ROOT" ]; then
    echo "ERROR: This installation script works only in the Infinity environment!"
@@ -20,24 +16,19 @@ fi
 module add cmake
 
 # names ------------------------------
-NAME=`ls *.tar.gz`
-BASE=`basename $NAME .tar.gz`
+GITREVS=`git rev-list --count HEAD`
+GITHASH=`git rev-parse --short HEAD`
+NAME="admin-tools"
+VERSION="$MAJOR_VERSION.$GITREVS.$GITHASH"
 ARCH="noarch"
-VERSION=`echo $BASE | sed -e "s/${PKG}-//g"`
 echo "Build: $PKG:$VERSION:$ARCH:single"
 
-# unpack archive ---------------------
-rm -rf $BASE
-tar xzvf $NAME
-
 # build and install software ---------
-cd $BASE
 cmake -DCMAKE_INSTALL_PREFIX=$SOFTREPO/$PREFIX/$PKG/$VERSION/$ARCH/single .
 make install
 if [ $? -ne 0 ]; then exit 1; fi
 
 cd ..
-rm -rf $BASE
 
 # prepare build file -----------------
 SOFTBLDS=$AMS_ROOT/etc/map/builds/$PREFIX
