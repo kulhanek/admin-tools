@@ -6,7 +6,6 @@ INSTALL(FILES
             nodes-apt-diff
             nodes-apt-get
             nodes-run-cmd
-            nodes-offline
         DESTINATION
             bin
         PERMISSIONS
