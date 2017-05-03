@@ -10,7 +10,7 @@ fi
 
 EXTRA=""
 MODE="par"
-RUSER=root
+RUSER=infinity
 while [ $# -gt 0 ]; do
     case "$1" in
         '--keep' | '-k' )
