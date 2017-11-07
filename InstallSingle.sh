@@ -5,6 +5,8 @@ PKG="admin-tools"
 MAJOR_VERSION=2
 PREFIX="common"
 
+set -o pipefail
+
 # ------------------------------------
 
 if [ -z "$AMS_ROOT" ]; then
@@ -44,12 +46,21 @@ cat > $SOFTBLDS/$PKG:$VERSION:$ARCH:single.bld << EOF
     </setup>
 </build>
 EOF
-
-ams-map-manip addbuilds $SITES $PKG:$VERSION:$ARCH:single
 if [ $? -ne 0 ]; then exit 1; fi
 
-ams-map-manip distribute
-if [ $? -ne 0 ]; then exit 1; fi
+echo ""
+echo "Adding builds ..."
+ams-map-manip addbuilds $SITES $NAME:$VERS:$ARCH:$MODE >> ams.log 2>&1
+if [ $? -ne 0 ]; then echo ">>> ERROR: see ams.log"; exit 1; fi
 
-ams-cache rebuildall
+echo "Distribute builds ..."
+ams-map-manip distribute >> ams.log 2>&1
+if [ $? -ne 0 ]; then echo ">>> ERROR: see ams.log"; exit 1; fi
+
+echo "Rebuilding cache ..."
+ams-cache rebuildall >> ams.log 2>&1
+if [ $? -ne 0 ]; then echo ">>> ERROR: see ams.log"; exit 1; fi
+
+echo "Log file: ams.log"
+echo ""
 
