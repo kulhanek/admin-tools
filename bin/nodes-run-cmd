@@ -8,6 +8,21 @@ if [ "`id -un`" != "infinity" ]; then
    exit 1
 fi 
 
+set -o pipefail
+klist -s
+if [ $? -ne 0 ]; then
+   echo ">> ERROR: Valid TGT kerberos ticket is required!"
+   echo ""
+   exit 1
+fi 
+
+klist | grep "`id -un`@META" &> /dev/null
+if [ $? -ne 0 ]; then
+   echo ">> ERROR: Valid TGT kerberos ticket for `id -un`@META is required!"
+   echo ""
+   exit 1
+fi 
+
 EXTRA=""
 MODE="par"
 RUSER=root
@@ -56,6 +71,13 @@ while [ $# -gt 0 ]; do
             ;;
     esac
 done
+
+id "$RUSER" &> /dev/null
+if [ $? -ne 0 ]; then
+   echo ">> ERROR: Remote user '$RUSER' does not exist on the local machine!"
+   echo ""
+   exit 1
+fi 
 
 # get all nodes from torque
 NODES=`eval "pnodes --hosts $EXTRA"`
