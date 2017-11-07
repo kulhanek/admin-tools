@@ -50,7 +50,7 @@ if [ $? -ne 0 ]; then exit 1; fi
 
 echo ""
 echo "Adding builds ..."
-ams-map-manip addbuilds $SITES $NAME:$VERS:$ARCH:$MODE >> ams.log 2>&1
+ams-map-manip addbuilds $SITES $PKG:$VERSION:$ARCH:single >> ams.log 2>&1
 if [ $? -ne 0 ]; then echo ">>> ERROR: see ams.log"; exit 1; fi
 
 echo "Distribute builds ..."
